@@ -254,3 +254,77 @@ resource "aws_lb_target_group_attachment" "web" {
   target_id        = aws_instance.web.id
   port             = 80
 }
+
+resource "aws_s3_bucket" "app_bucket" {
+  bucket = "aqary-tasks-terraform-bucket"
+
+  tags = {
+    Name        = "app-bucket"
+    Environment = "dev"
+  }
+}
+
+resource "aws_security_group" "db_sg" {
+  name        = "db-sg"
+  description = "Allow PostgreSQL access"
+  vpc_id      = aws_vpc.main.id
+
+  ingress {
+    description      = "PostgreSQL from web servers"
+    from_port        = 5432
+    to_port          = 5432
+    protocol         = "tcp"
+    security_groups  = [aws_security_group.web_sg.id]
+  }
+
+  egress {
+    from_port   = 0
+    to_port     = 0
+    protocol    = "-1"
+    cidr_blocks = ["0.0.0.0/0"]
+  }
+
+  tags = {
+    Name = "db-sg"
+  }
+}
+
+resource "aws_db_subnet_group" "postgres" {
+  name       = "postgres-subnet-group"
+  subnet_ids = aws_subnet.private[*].id
+
+  tags = {
+    Name = "postgres-subnet-group"
+  }
+}
+
+resource "aws_db_instance" "postgres" {
+  allocated_storage      = 20
+  storage_type           = "gp2"
+  engine                 = "postgres"
+  engine_version         = "15.3"
+  instance_class         = "db.t3.micro"
+  db_name                = "mydb"
+  username               = "postgres"
+  password               = "Password123@"
+  db_subnet_group_name   = aws_db_subnet_group.postgres.name
+  vpc_security_group_ids = [aws_security_group.db_sg.id]
+  skip_final_snapshot    = true
+  publicly_accessible    = false
+
+  tags = {
+    Name = "postgres-db"
+  }
+}
+
+resource "aws_sqs_queue" "app_queue" {
+  name                       = "app-queue"
+  visibility_timeout_seconds = 30
+  message_retention_seconds  = 345600
+  delay_seconds              = 0
+  max_message_size           = 262144
+
+  tags = {
+    Name = "app-queue"
+  }
+}
