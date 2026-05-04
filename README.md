@@ -1,12 +1,12 @@
 # aqary-tasks
 
-🚀 Terraform AWS Infrastructure (LocalStack-Based)
+ Terraform AWS Infrastructure (LocalStack-Based)
 
 This project provisions a complete AWS-like infrastructure using Terraform, designed to run locally with LocalStack for development and testing purposes.
 
 It simulates a production-style architecture including networking, compute, storage, database, messaging, and serverless components.
 
-📌 Overview
+ Overview
 
 This Terraform configuration creates:
 
@@ -22,7 +22,7 @@ IAM roles and security groups
 
 All AWS services are configured to run against LocalStack endpoints (http://localhost:4566).
 
-🏗️ Architecture
+ Architecture
                 Internet
                     |
              [ Internet Gateway ]
@@ -40,7 +40,7 @@ All AWS services are configured to run against LocalStack endpoints (http://loca
 S3 Bucket --> Lambda --> (processing)
        |
       SQS Queue
-⚙️ Prerequisites
+ Prerequisites
 
 Make sure you have:
 
@@ -52,12 +52,12 @@ LocalStack running locally
 Start LocalStack:
 
 docker run -d -p 4566:4566 localstack/localstack
-🔧 Configuration Notes
+ Configuration Notes
 AWS credentials are mock values (used only for LocalStack)
 Region: us-east-1
 All AWS services are redirected to LocalStack endpoints
 No real AWS resources are created
-🚀 Usage
+ Usage
 1. Initialize Terraform
 terraform init
 2. Preview the infrastructure
@@ -67,36 +67,36 @@ terraform apply
 
 Confirm with yes when prompted.
 
-📦 Resources Created
-🌐 Networking
+ Resources Created
+ Networking
 VPC (10.0.0.0/16)
 3 Public Subnets
 3 Private Subnets
 Internet Gateway
 Route Table (public)
-🖥️ Compute
+ Compute
 EC2 Instance (t2.micro)
 Runs Docker
 Hosts NGINX container on port 80
-⚖️ Load Balancing
+ Load Balancing
 Application Load Balancer
 Target Group + Listener
-🛢️ Database
+ Database
 PostgreSQL RDS instance (private subnets)
-📁 Storage
+ Storage
 S3 Bucket (aqary-tasks-terraform-bucket)
 Event notifications to Lambda
-⚡ Serverless
+ Serverless
 Lambda function (python3.13)
 Triggered by S3 object creation
-📬 Messaging
+ Messaging
 SQS Queue (app-queue)
-🔐 Security
+ Security
 Security Groups:
 Web SG (SSH + HTTP)
 ALB SG (HTTP)
 DB SG (PostgreSQL from web only)
-🔄 Data Flow
+ Data Flow
 User accesses the ALB
 ALB routes traffic to the EC2 instance
 EC2 serves content via NGINX (Docker)
@@ -104,11 +104,10 @@ Files uploaded to S3
 S3 triggers Lambda function
 Lambda processes events (extendable)
 Messages can be queued via SQS
-🧪 Testing
+ Testing
 Access EC2 (via LocalStack simulation)
 NGINX runs on port 80
 Try:
-curl http://localhost
 Test S3 → Lambda trigger
 
 Upload a file to the bucket and verify Lambda execution logs.
