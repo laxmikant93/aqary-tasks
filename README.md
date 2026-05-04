@@ -10,18 +10,11 @@ It simulates a production-style architecture including networking, compute, stor
 
 This Terraform configuration creates:
 
-A custom VPC with public and private subnets
-Internet Gateway and routing for public access
-EC2 instance running Dockerized NGINX
-Application Load Balancer (ALB)
-PostgreSQL RDS instance (private)
-S3 bucket with event notifications
-Lambda function triggered by S3
-SQS queue for asynchronous messaging
-IAM roles and security groups
+A custom VPC with public and private subnets Internet Gateway and routing for public access EC2 instance running Dockerized NGINX Application Load Balancer (ALB) PostgreSQL RDS instance (private) S3 bucket with event notifications Lambda function triggered by S3 SQS queue for asynchronous messaging IAM roles and security groups
 
 All AWS services are configured to run against LocalStack endpoints (http://localhost:4566).
 
+ 
  Architecture
                 Internet
                     |
@@ -42,12 +35,16 @@ S3 Bucket --> Lambda --> (processing)
       SQS Queue
  Prerequisites
 
+
+
 Make sure you have:
 
 Terraform
  >= 1.0
 Docker
 LocalStack running locally
+
+
 
 Start LocalStack:
 
