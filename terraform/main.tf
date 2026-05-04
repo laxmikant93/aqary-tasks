@@ -1,4 +1,3 @@
-#terraform settings and provider block
 terraform {
   required_providers {
     aws = {
@@ -8,7 +7,7 @@ terraform {
   }
 }
 
-#mentioning aws provider block and aligning with ministack configuration
+
 provider "aws" {
   region                      = "us-east-1"
   access_key                  = "111111111111"
@@ -59,7 +58,7 @@ provider "aws" {
     wafv2           = "http://localhost:4566"
   }
 }
-#vpc resource creation
+
 resource "aws_vpc" "main" {
   cidr_block = "10.0.0.0/16"
 
@@ -69,7 +68,7 @@ resource "aws_vpc" "main" {
     Environment = "dev"
   }
 }
-# internet gateway creation for public subnets
+
 resource "aws_internet_gateway" "igw" {
   vpc_id = aws_vpc.main.id
 
@@ -101,7 +100,7 @@ resource "aws_subnet" "private" {
     Name = "private-subnet-${count.index + 1}"
   }
 }
-# route table configuration
+
 resource "aws_route_table" "public" {
   vpc_id = aws_vpc.main.id
 
@@ -114,14 +113,14 @@ resource "aws_route_table" "public" {
     Name = "public-rt"
   }
 }
-#Associating Route table with subnets
+
 resource "aws_route_table_association" "public" {
   count = 3
 
   subnet_id      = aws_subnet.public[count.index].id
   route_table_id = aws_route_table.public.id
 }
-#Adding Security groups with network for vm instance
+
 resource "aws_security_group" "web_sg" {
   name        = "web-sg"
   description = "Allow SSH and HTTP access"
@@ -154,7 +153,7 @@ resource "aws_security_group" "web_sg" {
     Name = "web-sg"
   }
 }
-#elastic ip for aws instance
+
 resource "aws_eip" "web" {
   instance = aws_instance.web.id
   domain   = "vpc"
@@ -165,7 +164,7 @@ resource "aws_eip" "web" {
 
   depends_on = [aws_internet_gateway.igw]
 }
-# creation of aws instance
+
 resource "aws_instance" "web" {
   ami                    = "ami-0c94855ba95c71c99"
   instance_type          = "t2.micro"
@@ -188,7 +187,7 @@ EOF
     Name = "web-server"
   }
 }
-# ALB security group creation
+
 resource "aws_security_group" "alb_sg" {
   name        = "alb-sg"
   description = "Allow HTTP access"
@@ -213,7 +212,7 @@ resource "aws_security_group" "alb_sg" {
     Name = "alb-sg"
   }
 }
-#Adding target groups
+
 resource "aws_lb_target_group" "web" {
   name     = "web-tg"
   port     = 80
@@ -225,7 +224,7 @@ resource "aws_lb_target_group" "web" {
     port = "traffic-port"
   }
 }
-# ALB added
+
 resource "aws_lb" "web" {
   name               = "web-alb"
   internal           = false
@@ -238,7 +237,7 @@ resource "aws_lb" "web" {
     Name = "web-alb"
   }
 }
-#Listener for ALB type
+
 resource "aws_lb_listener" "web" {
   load_balancer_arn = aws_lb.web.arn
   port              = "80"
@@ -249,13 +248,13 @@ resource "aws_lb_listener" "web" {
     target_group_arn = aws_lb_target_group.web.arn
   }
 }
-#Attach ALB to VM
+
 resource "aws_lb_target_group_attachment" "web" {
   target_group_arn = aws_lb_target_group.web.arn
   target_id        = aws_instance.web.id
   port             = 80
 }
-#Create S3 Bucket for file store
+
 resource "aws_s3_bucket" "app_bucket" {
   bucket = "aqary-tasks-terraform-bucket"
 
@@ -264,7 +263,7 @@ resource "aws_s3_bucket" "app_bucket" {
     Environment = "dev"
   }
 }
-#db security group
+
 resource "aws_security_group" "db_sg" {
   name        = "db-sg"
   description = "Allow PostgreSQL access"
@@ -289,7 +288,7 @@ resource "aws_security_group" "db_sg" {
     Name = "db-sg"
   }
 }
-#subnet group
+
 resource "aws_db_subnet_group" "postgres" {
   name       = "postgres-subnet-group"
   subnet_ids = aws_subnet.private[*].id
@@ -298,7 +297,7 @@ resource "aws_db_subnet_group" "postgres" {
     Name = "postgres-subnet-group"
   }
 }
-#db server
+
 resource "aws_db_instance" "postgres" {
   allocated_storage      = 20
   storage_type           = "gp2"
@@ -317,7 +316,7 @@ resource "aws_db_instance" "postgres" {
     Name = "postgres-db"
   }
 }
-#AWS SQS configuration
+
 resource "aws_sqs_queue" "app_queue" {
   name                       = "app-queue"
   visibility_timeout_seconds = 30
@@ -329,6 +328,49 @@ resource "aws_sqs_queue" "app_queue" {
     Name = "app-queue"
   }
 }
+resource "aws_iam_role" "lambda_role" {
+  name = "lambda-execution-role"
 
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
 
+resource "aws_iam_role_policy_attachment" "lambda_basic" {
+  role       = aws_iam_role.lambda_role.name
+  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
+}
+resource "aws_lambda_function" "processor" {
+  function_name = "simple-processor"
+  handler       = "index.handler"
+  runtime       = "python3.13"
+  role          = aws_iam_role.lambda_role.arn
+
+  filename = "python.zip"
+}
+
+resource "aws_lambda_permission" "allow_s3" {
+  statement_id  = "AllowS3Invoke"
+  action        = "lambda:InvokeFunction"
+  function_name = aws_lambda_function.processor.function_name
+  principal     = "s3.amazonaws.com"
+}
+
+resource "aws_s3_bucket_notification" "notify" {
+  bucket = aws_s3_bucket.app_bucket.id
+
+  lambda_function {
+    lambda_function_arn = aws_lambda_function.processor.arn
+    events              = ["s3:ObjectCreated:*"]
+  }
+}
 
