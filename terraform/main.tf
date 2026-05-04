@@ -328,3 +328,20 @@ resource "aws_sqs_queue" "app_queue" {
     Name = "app-queue"
   }
 }
+
+resource "aws_iam_role" "lambda_role" {
+  name = "lambda-sqs-role"
+
+  assume_role_policy = jsonencode({
+    Version = "2012-10-17"
+    Statement = [
+      {
+        Action = "sts:AssumeRole"
+        Effect = "Allow"
+        Principal = {
+          Service = "lambda.amazonaws.com"
+        }
+      }
+    ]
+  })
+}
