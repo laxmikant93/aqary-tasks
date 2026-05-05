@@ -38,3 +38,7 @@ output "alb_url" {
   value       = "http://${aws_lb.web.dns_name}"
   description = "URL of the Application Load Balancer."
 }
+
+output "db_endpoint" {
+  value = aws_db_instance.postgres.endpoint
+}

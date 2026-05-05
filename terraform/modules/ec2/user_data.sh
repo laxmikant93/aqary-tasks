@@ -29,5 +29,9 @@ docker build -t fastapi-app .
 # Run container
 docker run -d \
   -p 8000:8000 \
-  --name fastapi \
-  fastapi-app
+  -e QUEUE_URL="https://sqs.us-east-1.amazonaws.com/111111111111/fastapi-jobs" \
+  -e DB_HOST="localhost:5432" \
+  -e DB_USER="postgres" \
+  -e DB_PASS="Password123@" \
+  -e DB_NAME="mydb" \
+  fastapi-sqs-app

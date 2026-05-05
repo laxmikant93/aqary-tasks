@@ -247,25 +247,14 @@ resource "aws_db_instance" "postgres" {
   }
 }
 
-# module "sqs" {
-#   source = "./modules/sqs"
+module "sqs" {
+  source = "./modules/sqs"
+  queue_name = "fastapi-jobs"
+}
 
-#   queue_name = "fastapi-jobs"
-# }
+module "iam" {
+  source = "./modules/iam"
 
-# module "iam" {
-#   source = "./modules/iam"
-
-#   queue_arn = module.sqs.queue_arn
-# }
-
-# module "worker" {
-#   source = "./modules/worker"
-
-#   ami_id             = "ami-xxxx"
-#   subnet_id          = module.vpc.public_subnets[0]
-#   security_group_ids = [module.sg.worker_sg]
-#   instance_profile   = module.iam.instance_profile
-# }
-
+  queue_arn = module.sqs.queue_arn
+}
 
