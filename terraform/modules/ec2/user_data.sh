@@ -24,7 +24,7 @@ git clone https://github.com/laxmikant93/aqary-tasks.git .
 cd apps
 
 # Build Docker image
-docker build -t fastapi-app .
+docker build -t fastapi-sqs-app .
 
 # Run container
 docker run -d \
@@ -34,4 +34,9 @@ docker run -d \
   -e DB_USER="postgres" \
   -e DB_PASS="Password123@" \
   -e DB_NAME="mydb" \
+  --name fastapi-app \
+  --log-driver=awslogs \
+  --log-opt awslogs-group=/fastapi/app \
+  --log-opt awslogs-region=us-east-1 \
+  --log-opt awslogs-stream=fastapi-container \
   fastapi-sqs-app

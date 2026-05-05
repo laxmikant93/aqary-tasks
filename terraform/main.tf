@@ -258,3 +258,17 @@ module "iam" {
   queue_arn = module.sqs.queue_arn
 }
 
+resource "aws_cloudwatch_log_group" "app_logs" {
+  name              = "/fastapi/app"
+  retention_in_days = 7
+
+  tags = {
+    Environment = "dev"
+    Service     = "fastapi"
+  }
+}
+
+resource "aws_cloudwatch_log_stream" "app_stream" {
+  name           = "ec2-fastapi-stream"
+  log_group_name = aws_cloudwatch_log_group.app_logs.name
+}
