@@ -73,17 +73,15 @@ resource "aws_security_group" "web_sg" {
   vpc_id      = module.vpc.vpc_id
 
   ingress {
-    description = "SSH"
-    from_port   = 22
-    to_port     = 22
+    from_port   = 8000
+    to_port     = 8000
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
 
   ingress {
-    description = "HTTP"
-    from_port   = 80
-    to_port     = 80
+    from_port   = 22
+    to_port     = 22
     protocol    = "tcp"
     cidr_blocks = ["0.0.0.0/0"]
   }
@@ -99,9 +97,12 @@ resource "aws_security_group" "web_sg" {
     Name = "web-sg"
   }
 }
-
+resource "aws_key_pair" "this" {
+  key_name   = "my-key"
+  public_key = file("${path.module}/my-key.pub")
+}
 resource "aws_eip" "web" {
-  instance = aws_instance.web.id
+  instance = module.ec2.instance_id
   domain   = "vpc"
 
   tags = {
@@ -111,28 +112,19 @@ resource "aws_eip" "web" {
   depends_on = [aws_internet_gateway.igw]
 }
 
-resource "aws_instance" "web" {
-  ami                    = "ami-0c94855ba95c71c99"
-  instance_type          = "t2.micro"
-  subnet_id              = aws_subnet.public[0].id
-  vpc_security_group_ids = [aws_security_group.web_sg.id]
-  associate_public_ip_address = true
+module "ec2" {
+  source = "./modules/ec2"
 
-  user_data = <<-EOF
-#!/bin/bash
-yum update -y
-yum install -y amazon-linux-extras
-amazon-linux-extras enable docker
-yum install -y docker
-service docker start
-docker run -d --name nginx -p 80:80 nginx
-curl -I http://localhost:80
-EOF
-
-  tags = {
-    Name = "web-server"
-  }
+  ami_id              = "ami-0c94855ba95c71c99"
+  instance_type       = "t3.micro"
+  subnet_id           = aws_subnet.public[0].id
+  security_group_ids  = [aws_security_group.web_sg.id]
+  key_name            = aws_key_pair.this.key_name
+  name                = "fastapi-docker-vm"
 }
+
+
+
 
 resource "aws_security_group" "alb_sg" {
   name        = "alb-sg"
@@ -197,7 +189,7 @@ resource "aws_lb_listener" "web" {
 
 resource "aws_lb_target_group_attachment" "web" {
   target_group_arn = aws_lb_target_group.web.arn
-  target_id        = aws_instance.web.id
+  target_id        = module.ec2.instance_id
   port             = 80
 }
 
