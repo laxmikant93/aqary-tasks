@@ -76,7 +76,7 @@ resource "aws_security_group" "web_sg" {
     from_port   = 8000
     to_port     = 8000
     protocol    = "tcp"
-    cidr_blocks = ["0.0.0.0/0"]
+    security_groups = [aws_security_group.alb_sg.id]
   }
 
   ingress {
@@ -102,12 +102,16 @@ resource "aws_key_pair" "this" {
   public_key = file("${path.module}/my-key.pub")
 }
 resource "aws_eip" "web" {
-  instance = module.ec2.instance_id
-  domain   = "vpc"
+  domain = "vpc"
 
   tags = {
     Name = "web-eip"
   }
+}
+
+resource "aws_eip_association" "web_assoc" {
+  instance_id   = module.ec2.instance_id
+  allocation_id = aws_eip.web.id
 
   depends_on = [aws_internet_gateway.igw]
 }
@@ -121,18 +125,13 @@ module "ec2" {
   security_group_ids  = [aws_security_group.web_sg.id]
   key_name            = aws_key_pair.this.key_name
   name                = "fastapi-docker-vm"
+  
 }
 
-
-
-
 resource "aws_security_group" "alb_sg" {
-  name        = "alb-sg"
-  description = "Allow HTTP access"
-  vpc_id      = module.vpc.vpc_id
-
+  name   = "alb-sg"
+  vpc_id = module.vpc.vpc_id
   ingress {
-    description = "HTTP"
     from_port   = 80
     to_port     = 80
     protocol    = "tcp"
@@ -145,52 +144,45 @@ resource "aws_security_group" "alb_sg" {
     protocol    = "-1"
     cidr_blocks = ["0.0.0.0/0"]
   }
-
-  tags = {
-    Name = "alb-sg"
-  }
+}
+resource "aws_lb" "web" {
+  name               = "fastapi-alb"
+  load_balancer_type = "application"
+  subnets            = module.vpc.public_subnet_ids
+  security_groups    = [aws_security_group.alb_sg.id]
 }
 
 resource "aws_lb_target_group" "web" {
-  name     = "web-tg"
-  port     = 80
+  name     = "fastapi-tg"
+  port     = 8000
   protocol = "HTTP"
   vpc_id   = module.vpc.vpc_id
 
   health_check {
-    path = "/health"
-    port = "traffic-port"
-  }
-}
-
-resource "aws_lb" "web" {
-  name               = "web-alb"
-  internal           = false
-  load_balancer_type = "application"
-  security_groups    = [aws_security_group.alb_sg.id]
-  subnets            = aws_subnet.public[*].id
-  enable_deletion_protection = false
-
-  tags = {
-    Name = "web-alb"
-  }
-}
-
-resource "aws_lb_listener" "web" {
-  load_balancer_arn = aws_lb.web.arn
-  port              = "80"
-  protocol          = "HTTP"
-
-  default_action {
-    type             = "forward"
-    target_group_arn = aws_lb_target_group.web.arn
+    path                = "/health"
+    port                = "8000"
+    healthy_threshold   = 2
+    unhealthy_threshold = 2
+    interval            = 10
+    timeout             = 5
   }
 }
 
 resource "aws_lb_target_group_attachment" "web" {
   target_group_arn = aws_lb_target_group.web.arn
   target_id        = module.ec2.instance_id
-  port             = 80
+  port             = 8000
+}
+
+resource "aws_lb_listener" "http" {
+  load_balancer_arn = aws_lb.web.arn
+  port              = 80
+  protocol          = "HTTP"
+
+  default_action {
+    type             = "forward"
+    target_group_arn = aws_lb_target_group.web.arn
+  }
 }
 
 resource "aws_s3_bucket" "app_bucket" {
@@ -255,59 +247,25 @@ resource "aws_db_instance" "postgres" {
   }
 }
 
-resource "aws_sqs_queue" "app_queue" {
-  name                       = "app-queue"
-  visibility_timeout_seconds = 30
-  message_retention_seconds  = 345600
-  delay_seconds              = 0
-  max_message_size           = 262144
+# module "sqs" {
+#   source = "./modules/sqs"
 
-  tags = {
-    Name = "app-queue"
-  }
-}
-resource "aws_iam_role" "lambda_role" {
-  name = "lambda-execution-role"
+#   queue_name = "fastapi-jobs"
+# }
 
-  assume_role_policy = jsonencode({
-    Version = "2012-10-17"
-    Statement = [
-      {
-        Action = "sts:AssumeRole"
-        Effect = "Allow"
-        Principal = {
-          Service = "lambda.amazonaws.com"
-        }
-      }
-    ]
-  })
-}
+# module "iam" {
+#   source = "./modules/iam"
 
-resource "aws_iam_role_policy_attachment" "lambda_basic" {
-  role       = aws_iam_role.lambda_role.name
-  policy_arn = "arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole"
-}
-resource "aws_lambda_function" "processor" {
-  function_name = "simple-processor"
-  handler       = "index.handler"
-  runtime       = "python3.13"
-  role          = aws_iam_role.lambda_role.arn
+#   queue_arn = module.sqs.queue_arn
+# }
 
-  filename = "python.zip"
-}
+# module "worker" {
+#   source = "./modules/worker"
 
-resource "aws_lambda_permission" "allow_s3" {
-  statement_id  = "AllowS3Invoke"
-  action        = "lambda:InvokeFunction"
-  function_name = aws_lambda_function.processor.function_name
-  principal     = "s3.amazonaws.com"
-}
+#   ami_id             = "ami-xxxx"
+#   subnet_id          = module.vpc.public_subnets[0]
+#   security_group_ids = [module.sg.worker_sg]
+#   instance_profile   = module.iam.instance_profile
+# }
 
-resource "aws_s3_bucket_notification" "notify" {
-  bucket = aws_s3_bucket.app_bucket.id
 
-  lambda_function {
-    lambda_function_arn = aws_lambda_function.processor.arn
-    events              = ["s3:ObjectCreated:*"]
-  }
-}
