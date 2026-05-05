@@ -114,7 +114,7 @@ resource "aws_eip" "web" {
 resource "aws_instance" "web" {
   ami                    = "ami-0c94855ba95c71c99"
   instance_type          = "t2.micro"
-  subnet_id              = module.vpc.public_subnet_ids[0]
+  subnet_id              = aws_subnet.public[0].id
   vpc_security_group_ids = [aws_security_group.web_sg.id]
   associate_public_ip_address = true
 
@@ -176,7 +176,7 @@ resource "aws_lb" "web" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_sg.id]
-  subnets            = module.vpc.public_subnet_ids
+  subnets            = aws_subnet.public[*].id
   enable_deletion_protection = false
 
   tags = {
@@ -237,7 +237,7 @@ resource "aws_security_group" "db_sg" {
 
 resource "aws_db_subnet_group" "postgres" {
   name       = "postgres-subnet-group"
-  subnet_ids = module.vpc.private_subnet_ids
+  subnet_ids = aws_subnet.private[*].id
 
   tags = {
     Name = "postgres-subnet-group"
@@ -254,7 +254,7 @@ resource "aws_db_instance" "postgres" {
   username               = "postgres"
   password               = "Password123@"
   db_subnet_group_name   = aws_db_subnet_group.postgres.name
-  vpc_security_group_ids = [module.vpc.vpc_id]
+  vpc_security_group_ids = [aws_security_group.db_sg.id]
   skip_final_snapshot    = true
   publicly_accessible    = false
 
@@ -319,4 +319,3 @@ resource "aws_s3_bucket_notification" "notify" {
     events              = ["s3:ObjectCreated:*"]
   }
 }
-
