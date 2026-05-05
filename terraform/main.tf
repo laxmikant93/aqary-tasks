@@ -1,76 +1,22 @@
-terraform {
-  required_providers {
-    aws = {
-      source  = "hashicorp/aws"
-      version = "~> 5.0"
-    }
-  }
-}
+module "vpc" {
+  source = "./modules/vpc"
 
+  vpc_name = "my-vpc"
+  vpc_cidr = "10.0.0.0/16"
 
-provider "aws" {
-  region                      = "us-east-1"
-  access_key                  = "111111111111"
-  secret_key                  = "AKIAIOSFODNN7EXAMPLE"
-  skip_credentials_validation = true
-  skip_metadata_api_check     = true
-  s3_use_path_style           = true
-  
-  endpoints {
-    acm             = "http://localhost:4566"
-    apigateway      = "http://localhost:4566"
-    appsync         = "http://localhost:4566"
-    athena          = "http://localhost:4566"
-    cloudformation  = "http://localhost:4566"
-    cloudfront      = "http://localhost:4566"
-    cloudwatch      = "http://localhost:4566"
-    codebuild       = "http://localhost:4566"
-    cognitoidentity = "http://localhost:4566"
-    cognitoidp      = "http://localhost:4566"
-    dynamodb        = "http://localhost:4566"
-    ec2             = "http://localhost:4566"
-    ecr             = "http://localhost:4566"
-    ecs             = "http://localhost:4566"
-    efs             = "http://localhost:4566"
-    elasticache     = "http://localhost:4566"
-    elbv2           = "http://localhost:4566"
-    emr             = "http://localhost:4566"
-    events          = "http://localhost:4566"
-    firehose        = "http://localhost:4566"
-    glue            = "http://localhost:4566"
-    iam             = "http://localhost:4566"
-    kinesis         = "http://localhost:4566"
-    kms             = "http://localhost:4566"
-    lambda          = "http://localhost:4566"
-    logs            = "http://localhost:4566"
-    rds             = "http://localhost:4566"
-    route53         = "http://localhost:4566"
-    s3              = "http://localhost:4566"
-    s3control       = "http://localhost:4566"
-    secretsmanager  = "http://localhost:4566"
-    ses             = "http://localhost:4566"
-    sesv2           = "http://localhost:4566"
-    sns             = "http://localhost:4566"
-    sqs             = "http://localhost:4566"
-    ssm             = "http://localhost:4566"
-    stepfunctions   = "http://localhost:4566"
-    sts             = "http://localhost:4566"
-    wafv2           = "http://localhost:4566"
-  }
-}
+  azs = ["us-east-1a", "us-east-1b", "us-east-1c"]
 
-resource "aws_vpc" "main" {
-  cidr_block = "10.0.0.0/16"
+  public_subnets  = ["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"]
+  private_subnets = ["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"]
 
   tags = {
-    Name        = "my-vpc"
     Terraform   = "true"
     Environment = "dev"
   }
 }
 
 resource "aws_internet_gateway" "igw" {
-  vpc_id = aws_vpc.main.id
+  vpc_id = module.vpc.vpc_id
 
   tags = {
     Name = "my-igw"
@@ -80,7 +26,7 @@ resource "aws_internet_gateway" "igw" {
 resource "aws_subnet" "public" {
   count = 3
 
-  vpc_id            = aws_vpc.main.id
+  vpc_id            = module.vpc.vpc_id
   cidr_block        = element(["10.0.101.0/24", "10.0.102.0/24", "10.0.103.0/24"], count.index)
   availability_zone = element(["us-east-1a", "us-east-1b", "us-east-1c"], count.index)
 
@@ -92,7 +38,7 @@ resource "aws_subnet" "public" {
 resource "aws_subnet" "private" {
   count = 3
 
-  vpc_id            = aws_vpc.main.id
+  vpc_id            = module.vpc.vpc_id
   cidr_block        = element(["10.0.1.0/24", "10.0.2.0/24", "10.0.3.0/24"], count.index)
   availability_zone = element(["us-east-1a", "us-east-1b", "us-east-1c"], count.index)
 
@@ -102,7 +48,7 @@ resource "aws_subnet" "private" {
 }
 
 resource "aws_route_table" "public" {
-  vpc_id = aws_vpc.main.id
+  vpc_id = module.vpc.vpc_id
 
   route {
     cidr_block = "0.0.0.0/0"
@@ -124,7 +70,7 @@ resource "aws_route_table_association" "public" {
 resource "aws_security_group" "web_sg" {
   name        = "web-sg"
   description = "Allow SSH and HTTP access"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = module.vpc.vpc_id
 
   ingress {
     description = "SSH"
@@ -168,7 +114,7 @@ resource "aws_eip" "web" {
 resource "aws_instance" "web" {
   ami                    = "ami-0c94855ba95c71c99"
   instance_type          = "t2.micro"
-  subnet_id              = aws_subnet.public[0].id
+  subnet_id              = module.vpc.public_subnet_ids[0]
   vpc_security_group_ids = [aws_security_group.web_sg.id]
   associate_public_ip_address = true
 
@@ -191,7 +137,7 @@ EOF
 resource "aws_security_group" "alb_sg" {
   name        = "alb-sg"
   description = "Allow HTTP access"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = module.vpc.vpc_id
 
   ingress {
     description = "HTTP"
@@ -217,7 +163,7 @@ resource "aws_lb_target_group" "web" {
   name     = "web-tg"
   port     = 80
   protocol = "HTTP"
-  vpc_id   = aws_vpc.main.id
+  vpc_id   = module.vpc.vpc_id
 
   health_check {
     path = "/health"
@@ -230,7 +176,7 @@ resource "aws_lb" "web" {
   internal           = false
   load_balancer_type = "application"
   security_groups    = [aws_security_group.alb_sg.id]
-  subnets            = aws_subnet.public[*].id
+  subnets            = module.vpc.public_subnet_ids
   enable_deletion_protection = false
 
   tags = {
@@ -267,7 +213,7 @@ resource "aws_s3_bucket" "app_bucket" {
 resource "aws_security_group" "db_sg" {
   name        = "db-sg"
   description = "Allow PostgreSQL access"
-  vpc_id      = aws_vpc.main.id
+  vpc_id      = module.vpc.vpc_id
 
   ingress {
     description      = "PostgreSQL from web servers"
@@ -291,7 +237,7 @@ resource "aws_security_group" "db_sg" {
 
 resource "aws_db_subnet_group" "postgres" {
   name       = "postgres-subnet-group"
-  subnet_ids = aws_subnet.private[*].id
+  subnet_ids = module.vpc.private_subnet_ids
 
   tags = {
     Name = "postgres-subnet-group"
@@ -308,7 +254,7 @@ resource "aws_db_instance" "postgres" {
   username               = "postgres"
   password               = "Password123@"
   db_subnet_group_name   = aws_db_subnet_group.postgres.name
-  vpc_security_group_ids = [aws_security_group.db_sg.id]
+  vpc_security_group_ids = [module.vpc.vpc_id]
   skip_final_snapshot    = true
   publicly_accessible    = false
 
