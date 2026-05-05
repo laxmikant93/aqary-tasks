@@ -241,12 +241,13 @@ resource "aws_db_instance" "postgres" {
   vpc_security_group_ids = [aws_security_group.db_sg.id]
   skip_final_snapshot    = true
   publicly_accessible    = false
-
+  storage_encrypted = true
+  kms_key_id        = aws_kms_key.postgres.arn
   tags = {
     Name = "postgres-db"
   }
 }
-
+resource "aws_kms_key" "postgres" {}
 module "sqs" {
   source = "./modules/sqs"
   queue_name = "fastapi-jobs"
@@ -271,4 +272,20 @@ resource "aws_cloudwatch_log_group" "app_logs" {
 resource "aws_cloudwatch_log_stream" "app_stream" {
   name           = "ec2-fastapi-stream"
   log_group_name = aws_cloudwatch_log_group.app_logs.name
+}
+
+resource "aws_flow_log" "vpc" {
+  log_destination      = aws_cloudwatch_log_group.app_logs.arn
+  traffic_type         = "ALL"
+  vpc_id               = module.vpc.vpc_id
+}
+
+resource "aws_s3_bucket_server_side_encryption_configuration" "app_bucket" {
+  bucket = aws_s3_bucket.app_bucket.id
+
+  rule {
+    apply_server_side_encryption_by_default {
+      sse_algorithm = "AES256"
+    }
+  }
 }
